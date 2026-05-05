@@ -2,6 +2,8 @@
 
 MCP server that pulls data from your MyFitnessPal account — food diary, exercise log, measurements, and nutrition summaries.
 
+**Repository:** https://github.com/IcaroBichir/mcp_myfitnesspal
+
 > MFP deprecated their public API in 2020. This server uses cookie-based auth against the MFP website via the `myfitnesspal` Python library.
 
 ## Requirements
@@ -25,42 +27,46 @@ MCP server that pulls data from your MyFitnessPal account — food diary, exerci
 
 ## Install with Claude
 
-Paste this prompt into Claude Code and it will handle the full setup:
+Paste this prompt into Claude Code and it will clone the repo and handle the full setup:
 
 ```
-Set up the MyFitnessPal MCP server for me. The repo is at /path/to/mcp_myfitnesspal.
+Set up the MyFitnessPal MCP server for me.
 
 Steps to complete:
-1. Create a Python virtual environment at .venv inside the repo
-2. Install dependencies: pip install "lxml>=5.0" "mcp[cli]" myfitnesspal python-dotenv
-3. Create a .env file in the repo with my credentials:
+1. Clone the repo:
+   git clone https://github.com/IcaroBichir/mcp_myfitnesspal.git ~/mcp_myfitnesspal
+2. Create a Python virtual environment inside it:
+   cd ~/mcp_myfitnesspal && python3 -m venv .venv
+3. Install dependencies:
+   .venv/bin/pip install "lxml>=5.0" "mcp[cli]" myfitnesspal python-dotenv
+4. Create a .env file at ~/mcp_myfitnesspal/.env with my credentials:
    MFP_USERNAME=<my MFP email or username>
    MFP_PASSWORD=<my MFP password>
-4. Add the server to ~/.claude/.mcp.json under mcpServers:
+5. Add the server to ~/.claude/.mcp.json under mcpServers:
    {
      "myfitnesspal": {
-       "command": "/path/to/mcp_myfitnesspal/.venv/bin/python3",
-       "args": ["/path/to/mcp_myfitnesspal/server.py"]
+       "command": "/Users/<your-username>/mcp_myfitnesspal/.venv/bin/python3",
+       "args": ["/Users/<your-username>/mcp_myfitnesspal/server.py"]
      }
    }
    Preserve any existing servers already in that file.
-5. Confirm the server imports cleanly by running:
-   .venv/bin/python3 -c "import server; print('OK')"
+6. Verify it works:
+   ~/mcp_myfitnesspal/.venv/bin/python3 -c "import server; print('OK')"
 
-Do not push anything to git. Do not hardcode credentials anywhere except the .env file.
+Do not hardcode credentials anywhere except the .env file. Do not commit the .env file.
 ```
 
-Replace `/path/to/mcp_myfitnesspal` with the actual path on your machine, and fill in your MFP credentials before sending. After Claude finishes, restart Claude Code (or open `/hooks` once) to load the new server.
+Fill in your MFP credentials before sending. After Claude finishes, restart Claude Code (or open `/hooks` once) to load the new server.
 
 ---
 
 ## Manual install
 
-### 1. Clone and enter the repo
+### 1. Clone the repo
 
 ```bash
-git clone <repo-url>
-cd mcp_myfitnesspal
+git clone https://github.com/IcaroBichir/mcp_myfitnesspal.git ~/mcp_myfitnesspal
+cd ~/mcp_myfitnesspal
 ```
 
 ### 2. Create a virtual environment and install dependencies
@@ -103,14 +109,14 @@ Edit `~/.claude/.mcp.json` (create it if it doesn't exist):
 {
   "mcpServers": {
     "myfitnesspal": {
-      "command": "/absolute/path/to/mcp_myfitnesspal/.venv/bin/python3",
-      "args": ["/absolute/path/to/mcp_myfitnesspal/server.py"]
+      "command": "/Users/your-username/mcp_myfitnesspal/.venv/bin/python3",
+      "args": ["/Users/your-username/mcp_myfitnesspal/server.py"]
     }
   }
 }
 ```
 
-Use absolute paths. If you already have other servers in that file, add `myfitnesspal` alongside them — don't replace the whole block.
+Use absolute paths — `~/` shortcuts don't work here. If you already have other servers in that file, add `myfitnesspal` alongside them; don't replace the whole block.
 
 ### 6. Restart Claude Code
 
