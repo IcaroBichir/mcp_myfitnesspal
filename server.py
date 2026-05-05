@@ -132,7 +132,7 @@ def get_food_diary(date: str) -> dict:
         })
 
     return {
-        "date": date,
+        "date": d.isoformat(),
         "meals": meals,
         "daily_totals": _sum_meal_totals(meals),
         "goals": _format_nutrition(dict(day.goals)) if day.goals else {},
@@ -153,10 +153,10 @@ def get_food_diary_range(start_date: str, end_date: str) -> list[dict]:
     """
     start = _parse_date(start_date)
     end = _parse_date(end_date)
-    if (end - start).days > 30:
-        raise ValueError("Date range cannot exceed 30 days per call.")
     if end < start:
         raise ValueError("end_date must be on or after start_date.")
+    if (end - start).days >= 30:
+        raise ValueError("Date range cannot exceed 30 days per call.")
 
     client = _get_client()
     results = []
@@ -199,7 +199,7 @@ def get_exercise_diary(date: str) -> dict:
             for entry in exercise_set.entries:
                 entries.append({
                     "name": entry.name,
-                    "nutrition_information": _format_nutrition(dict(entry.nutrition_information)),
+                    "nutrition": _format_nutrition(dict(entry.nutrition_information)),
                 })
             exercise_categories.append({
                 "name": exercise_set.name,
@@ -210,7 +210,7 @@ def get_exercise_diary(date: str) -> dict:
         pass
 
     return {
-        "date": date,
+        "date": d.isoformat(),
         "exercises": exercise_categories,
     }
 
@@ -227,9 +227,10 @@ def get_measurements(measurement: str = "Weight", days: int = 30) -> dict:
 
     Returns a dict with keys:
     - measurement: the metric name
-    - unit: the unit string if available
     - entries: list of {date, value} dicts ordered newest-first
     """
+    if days < 1:
+        raise ValueError("days must be at least 1.")
     if days > 365:
         raise ValueError("days cannot exceed 365.")
     lower_bound = (datetime.now() - timedelta(days=days)).date()
@@ -265,7 +266,9 @@ def get_nutrition_summary(start_date: str, end_date: str) -> dict:
     """
     start = _parse_date(start_date)
     end = _parse_date(end_date)
-    if (end - start).days > 30:
+    if end < start:
+        raise ValueError("end_date must be on or after start_date.")
+    if (end - start).days >= 30:
         raise ValueError("Date range cannot exceed 30 days per call.")
 
     client = _get_client()
