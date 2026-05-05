@@ -42,21 +42,17 @@ Steps to complete:
 4. Create a .env file at ~/mcp_myfitnesspal/.env with my credentials:
    MFP_USERNAME=<my MFP email or username>
    MFP_PASSWORD=<my MFP password>
-5. Add the server to ~/.claude/.mcp.json under mcpServers:
-   {
-     "myfitnesspal": {
-       "command": "/Users/<your-username>/mcp_myfitnesspal/.venv/bin/python3",
-       "args": ["/Users/<your-username>/mcp_myfitnesspal/server.py"]
-     }
-   }
-   Preserve any existing servers already in that file.
+5. Register the server globally with Claude Code:
+   claude mcp add -s user myfitnesspal \
+     ~/mcp_myfitnesspal/.venv/bin/python3 -- \
+     ~/mcp_myfitnesspal/server.py
 6. Verify it works:
    ~/mcp_myfitnesspal/.venv/bin/python3 -c "import server; print('OK')"
 
 Do not hardcode credentials anywhere except the .env file. Do not commit the .env file.
 ```
 
-Fill in your MFP credentials before sending. After Claude finishes, restart Claude Code (or open `/hooks` once) to load the new server.
+Fill in your MFP credentials before sending. After Claude registers the server, start a new Claude Code session to use it.
 
 ---
 
@@ -103,20 +99,15 @@ Keep this file out of version control — `.gitignore` already excludes it.
 
 ### 5. Register with Claude Code
 
-Edit `~/.claude/.mcp.json` (create it if it doesn't exist):
+Run this command (replace the path with wherever you cloned the repo):
 
-```json
-{
-  "mcpServers": {
-    "myfitnesspal": {
-      "command": "/Users/your-username/mcp_myfitnesspal/.venv/bin/python3",
-      "args": ["/Users/your-username/mcp_myfitnesspal/server.py"]
-    }
-  }
-}
+```bash
+claude mcp add -s user myfitnesspal \
+  ~/mcp_myfitnesspal/.venv/bin/python3 -- \
+  ~/mcp_myfitnesspal/server.py
 ```
 
-Use absolute paths — `~/` shortcuts don't work here. If you already have other servers in that file, add `myfitnesspal` alongside them; don't replace the whole block.
+The `-s user` flag registers the server globally so it's available in every Claude Code session, not just the current directory. This writes to `~/.claude.json` — the file Claude Code actually manages. Manually editing `.mcp.json` files won't take effect until the next session restart.
 
 ### 6. Restart Claude Code
 
