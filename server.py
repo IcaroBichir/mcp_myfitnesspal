@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """MyFitnessPal MCP server — pulls diary, exercise, and measurement data."""
 
-import pickle
+import json
+import os
 import time
 from datetime import datetime, date, timedelta
 from pathlib import Path
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
-_COOKIE_CACHE = Path.home() / ".mfp_cookies.pkl"
+_COOKIE_CACHE = Path.home() / ".mfp_cookies.json"
 _COOKIE_TTL = 12 * 3600  # seconds before re-reading from Chrome
 
 mcp = FastMCP("MyFitnessPal")
@@ -53,11 +54,15 @@ def _load_cookiejar():
     if _COOKIE_CACHE.exists():
         age = time.time() - _COOKIE_CACHE.stat().st_mtime
         if age < _COOKIE_TTL:
-            with open(_COOKIE_CACHE, "rb") as f:
-                return _list_to_cookiejar(pickle.load(f))
+            try:
+                with open(_COOKIE_CACHE) as f:
+                    return _list_to_cookiejar(json.load(f))
+            except (json.JSONDecodeError, KeyError, OSError):
+                _COOKIE_CACHE.unlink(missing_ok=True)
     cj = browser_cookie3.chrome(domain_name="myfitnesspal.com")
-    with open(_COOKIE_CACHE, "wb") as f:
-        pickle.dump(_cookies_to_list(cj), f)
+    with open(_COOKIE_CACHE, "w") as f:
+        os.chmod(_COOKIE_CACHE, 0o600)
+        json.dump(_cookies_to_list(cj), f)
     return cj
 
 
@@ -238,7 +243,7 @@ def get_measurements(measurement: str = "Weight", days: int = 30) -> dict:
     raw = client.get_measurements(measurement, lower_bound=lower_bound)
 
     entries = [
-        {"date": dt.isoformat() if hasattr(dt, "isoformat") else str(dt), "value": v}
+        {"date": dt.isoformat() if hasattr(dt, "isoformat") else str(dt), "value": _to_number(v)}
         for dt, v in raw.items()
     ]
     entries.sort(key=lambda x: x["date"], reverse=True)
@@ -334,5 +339,9 @@ def get_goals(date: Optional[str] = None) -> dict:
     }
 
 
-if __name__ == "__main__":
+def main():
     mcp.run()
+
+
+if __name__ == "__main__":
+    main()

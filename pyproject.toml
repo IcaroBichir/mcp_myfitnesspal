@@ -7,7 +7,8 @@ dependencies = [
     "mcp[cli]",
     "myfitnesspal",
     "lxml>=5.0",
+    "browser-cookie3",
 ]
 
 [project.scripts]
-mcp-myfitnesspal = "server:mcp.run"
+mcp-myfitnesspal = "server:main"

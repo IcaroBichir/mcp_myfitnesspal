@@ -48,7 +48,8 @@ Steps to complete:
 2. Create a Python virtual environment inside it:
    cd ~/mcp_myfitnesspal && python3 -m venv .venv
 3. Install dependencies:
-   .venv/bin/pip install "lxml>=5.0" "mcp[cli]" myfitnesspal
+   .venv/bin/pip install "lxml>=5.0" "mcp[cli]" myfitnesspal browser-cookie3
+   (or simply: .venv/bin/pip install -e .)
 4. Warm the cookie cache:
    cd ~/mcp_myfitnesspal && .venv/bin/python3 -c "import server; server._get_client(); print('Auth OK')"
    (macOS will show a Keychain dialog — click Allow. This only happens once.)
@@ -77,7 +78,7 @@ cd ~/mcp_myfitnesspal
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install "lxml>=5.0" "mcp[cli]" myfitnesspal
+.venv/bin/pip install "lxml>=5.0" "mcp[cli]" myfitnesspal browser-cookie3
 ```
 
 > **Python 3.14 note:** `lxml` 4.x doesn't build on 3.14. The `lxml>=5.0` pin above handles this automatically.
