@@ -1,14 +1,37 @@
 [project]
 name = "mcp-myfitnesspal"
 version = "0.1.0"
-description = "MCP server for MyFitnessPal data"
+description = "MCP server for MyFitnessPal — pull diary, exercise, and measurement data into Claude"
+readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.11"
+keywords = ["mcp", "myfitnesspal", "claude", "fitness", "nutrition", "health"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
 dependencies = [
-    "mcp[cli]",
+    "mcp[cli]>=1.0.0",
     "myfitnesspal",
     "lxml>=5.0",
     "browser-cookie3",
+    "click>=8.1.0",
 ]
 
 [project.scripts]
-mcp-myfitnesspal = "server:main"
+mfp-mcp = "mfp_mcp.__main__:cli"
+
+[project.urls]
+Homepage = "https://github.com/IcaroBichir/mcp_myfitnesspal"
+Issues = "https://github.com/IcaroBichir/mcp_myfitnesspal/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mfp_mcp"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
