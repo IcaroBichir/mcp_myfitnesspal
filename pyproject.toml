@@ -1,0 +1,14 @@
+[project]
+name = "mcp-myfitnesspal"
+version = "0.1.0"
+description = "MCP server for MyFitnessPal data"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp[cli]",
+    "myfitnesspal",
+    "python-dotenv",
+    "lxml>=5.0",
+]
+
+[project.scripts]
+mcp-myfitnesspal = "server:mcp.run"
