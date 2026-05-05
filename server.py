@@ -2,12 +2,13 @@
 """MyFitnessPal MCP server — pulls diary, exercise, and measurement data."""
 
 import os
+from pathlib import Path
 from datetime import datetime, date, timedelta
 from typing import Optional
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
-load_dotenv()
+load_dotenv(Path(__file__).parent / ".env")
 
 mcp = FastMCP("MyFitnessPal")
 
