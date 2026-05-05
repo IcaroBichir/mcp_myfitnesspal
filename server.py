@@ -1,29 +1,71 @@
 #!/usr/bin/env python3
 """MyFitnessPal MCP server — pulls diary, exercise, and measurement data."""
 
-import os
-from pathlib import Path
+import pickle
+import time
 from datetime import datetime, date, timedelta
+from pathlib import Path
 from typing import Optional
-from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
-load_dotenv(Path(__file__).parent / ".env")
+_COOKIE_CACHE = Path.home() / ".mfp_cookies.pkl"
+_COOKIE_TTL = 12 * 3600  # seconds before re-reading from Chrome
 
 mcp = FastMCP("MyFitnessPal")
 
 _client = None
 
 
+def _cookies_to_list(cj):
+    return [
+        {k: getattr(c, k) for k in ("name", "value", "domain", "path", "secure", "expires")}
+        for c in cj
+    ]
+
+
+def _list_to_cookiejar(cookie_list):
+    import http.cookiejar
+    cj = http.cookiejar.CookieJar()
+    for attrs in cookie_list:
+        c = http.cookiejar.Cookie(
+            version=0,
+            name=attrs["name"],
+            value=attrs["value"],
+            port=None, port_specified=False,
+            domain=attrs["domain"],
+            domain_specified=bool(attrs["domain"]),
+            domain_initial_dot=attrs["domain"].startswith("."),
+            path=attrs["path"],
+            path_specified=bool(attrs["path"]),
+            secure=attrs["secure"],
+            expires=attrs["expires"],
+            discard=True,
+            comment=None, comment_url=None,
+            rest={},
+        )
+        cj.set_cookie(c)
+    return cj
+
+
+def _load_cookiejar():
+    """Return cached cookiejar from disk, or read fresh from Chrome and cache it."""
+    import browser_cookie3
+    if _COOKIE_CACHE.exists():
+        age = time.time() - _COOKIE_CACHE.stat().st_mtime
+        if age < _COOKIE_TTL:
+            with open(_COOKIE_CACHE, "rb") as f:
+                return _list_to_cookiejar(pickle.load(f))
+    cj = browser_cookie3.chrome(domain_name="myfitnesspal.com")
+    with open(_COOKIE_CACHE, "wb") as f:
+        pickle.dump(_cookies_to_list(cj), f)
+    return cj
+
+
 def _get_client():
     global _client
     if _client is None:
         import myfitnesspal
-        username = os.environ.get("MFP_USERNAME")
-        password = os.environ.get("MFP_PASSWORD")
-        if not username or not password:
-            raise RuntimeError("MFP_USERNAME and MFP_PASSWORD must be set")
-        _client = myfitnesspal.Client(username, password=password, unit_aware=True)
+        _client = myfitnesspal.Client(cookiejar=_load_cookiejar(), unit_aware=True)
     return _client
 
 
@@ -36,9 +78,25 @@ def _parse_date(date_str: str) -> date:
     raise ValueError(f"Unrecognized date format: {date_str!r}. Use YYYY-MM-DD.")
 
 
+def _to_number(v):
+    """Convert measurement library objects (Energy, Mass) or floats to plain numbers."""
+    if isinstance(v, float):
+        return round(v, 1)
+    if hasattr(v, "value"):
+        return round(v.value, 1)
+    return v
+
+
 def _format_nutrition(nutrition: dict) -> dict:
-    """Round floats to one decimal for cleaner output."""
-    return {k: round(v, 1) if isinstance(v, float) else v for k, v in nutrition.items()}
+    return {k: _to_number(v) for k, v in nutrition.items()}
+
+
+def _sum_meal_totals(meals: list[dict]) -> dict:
+    totals: dict = {}
+    for meal in meals:
+        for k, v in meal["totals"].items():
+            totals[k] = round(totals.get(k, 0) + (v or 0), 1)
+    return totals
 
 
 @mcp.tool()
@@ -76,7 +134,7 @@ def get_food_diary(date: str) -> dict:
     return {
         "date": date,
         "meals": meals,
-        "daily_totals": _format_nutrition(dict(day.totals)),
+        "daily_totals": _sum_meal_totals(meals),
         "goals": _format_nutrition(dict(day.goals)) if day.goals else {},
     }
 
@@ -105,9 +163,13 @@ def get_food_diary_range(start_date: str, end_date: str) -> list[dict]:
     current = start
     while current <= end:
         day = client.get_date(current.year, current.month, current.day)
+        meal_totals = [
+            {"totals": _format_nutrition(dict(meal.totals))}
+            for meal in day.meals
+        ]
         results.append({
             "date": current.isoformat(),
-            "daily_totals": _format_nutrition(dict(day.totals)),
+            "daily_totals": _sum_meal_totals(meal_totals),
             "goals": _format_nutrition(dict(day.goals)) if day.goals else {},
         })
         current += timedelta(days=1)
@@ -131,18 +193,21 @@ def get_exercise_diary(date: str) -> dict:
     day = client.get_date(d.year, d.month, d.day)
 
     exercise_categories = []
-    for exercise_set in day.exercises:
-        entries = []
-        for entry in exercise_set.entries:
-            entries.append({
-                "name": entry.name,
-                "nutrition_information": _format_nutrition(dict(entry.nutrition_information)),
+    try:
+        for exercise_set in day.exercises:
+            entries = []
+            for entry in exercise_set.entries:
+                entries.append({
+                    "name": entry.name,
+                    "nutrition_information": _format_nutrition(dict(entry.nutrition_information)),
+                })
+            exercise_categories.append({
+                "name": exercise_set.name,
+                "entries": entries,
+                "totals": _format_nutrition(dict(exercise_set.totals)),
             })
-        exercise_categories.append({
-            "name": exercise_set.name,
-            "entries": entries,
-            "totals": _format_nutrition(dict(exercise_set.totals)),
-        })
+    except KeyError:
+        pass
 
     return {
         "date": date,
@@ -167,7 +232,7 @@ def get_measurements(measurement: str = "Weight", days: int = 30) -> dict:
     """
     if days > 365:
         raise ValueError("days cannot exceed 365.")
-    lower_bound = datetime.now() - timedelta(days=days)
+    lower_bound = (datetime.now() - timedelta(days=days)).date()
     client = _get_client()
     raw = client.get_measurements(measurement, lower_bound=lower_bound)
 
@@ -211,7 +276,11 @@ def get_nutrition_summary(start_date: str, end_date: str) -> dict:
     current = start
     while current <= end:
         day = client.get_date(current.year, current.month, current.day)
-        day_totals = dict(day.totals)
+        meal_totals = [
+            {"totals": _format_nutrition(dict(meal.totals))}
+            for meal in day.meals
+        ]
+        day_totals = _sum_meal_totals(meal_totals)
         if any(v for v in day_totals.values()):
             days_with_data += 1
             for key, val in day_totals.items():
