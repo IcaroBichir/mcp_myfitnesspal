@@ -14,9 +14,11 @@ MCP server that pulls data from your MyFitnessPal account — food diary, exerci
 
 ## How auth works
 
-The server reads your MFP session cookies from Chrome via `browser_cookie3`. On macOS, Chrome encrypts its cookie database using a key stored in the system Keychain ("Chrome Safe Storage"). The first time the server runs, macOS will show a dialog asking for permission to access that key — click **Allow**. The cookies are then saved to `~/.config/mfp-mcp/cookies.json` (mode 0600) and reused for 12 hours, so subsequent server starts don't trigger the dialog again.
+The server reads your MFP session cookies from Chrome via `browser_cookie3`. On macOS, Chrome encrypts its cookie database using a key stored in the system Keychain ("Chrome Safe Storage"). The first time the server runs, macOS will show a dialog asking for permission to access that key — click **Allow**.
 
-To force a fresh cookie read — for example, after logging back into MFP in Chrome — delete the cache file:
+After reading the cookies, the server follows the MFP `/food/diary` redirect to resolve your MFP username. Both the cookies and username are saved to `~/.config/mfp-mcp/cookies.json` (mode 0600) and reused for 12 hours, so subsequent server starts don't trigger the Keychain dialog again.
+
+To force a fresh auth — for example, after logging back into MFP in Chrome — re-run `mfp-mcp auth`, or delete the cache file manually:
 
 ```bash
 rm ~/.config/mfp-mcp/cookies.json
@@ -93,7 +95,14 @@ Open Chrome and make sure you're logged into [myfitnesspal.com](https://www.myfi
 
 macOS will show a dialog: **"python3" wants access to your confidential information stored in "Chrome Safe Storage" in your keychain.** Click **Allow**.
 
-The server reads your MFP session cookies from Chrome, decrypts them using that Keychain key, and saves the result to `~/.config/mfp-mcp/cookies.json` (mode 0600). Future server starts load from that file — no further Keychain prompts until the cache expires (12 hours).
+The command reads your MFP session cookies from Chrome, resolves your MFP username via the `/food/diary` redirect, and saves both to `~/.config/mfp-mcp/cookies.json` (mode 0600). On success it prints:
+
+```
+Auth OK — logged in as: your_mfp_username
+Cache saved to: /Users/you/.config/mfp-mcp/cookies.json
+```
+
+Future server starts load from that file — no further Keychain prompts until the cache expires (12 hours).
 
 ### 5. Register with Claude Code
 
