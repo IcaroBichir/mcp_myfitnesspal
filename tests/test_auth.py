@@ -91,7 +91,7 @@ class TestLoadAuthExpiredCache:
         fetch_mock = MagicMock(return_value="freshuser")
 
         with patch("browser_cookie3.chrome", chrome_mock), \
-             patch.object(auth_module, "_fetch_username", fetch_mock):
+             patch.object(auth_module, "_get_username", fetch_mock):
             _cj, username = auth_module.load_auth()
 
         chrome_mock.assert_called_once_with(domain_name="myfitnesspal.com")
@@ -110,7 +110,7 @@ class TestLoadAuthExpiredCache:
         os.utime(cache_file, (old_time, old_time))
 
         with patch("browser_cookie3.chrome", return_value=_make_fake_cookiejar()), \
-             patch.object(auth_module, "_fetch_username", return_value="newuser"):
+             patch.object(auth_module, "_get_username", return_value="newuser"):
             auth_module.load_auth()
 
         # Cache file should have been rewritten with new username
@@ -139,7 +139,7 @@ class TestLoadAuthCorruptedCache:
         fetch_mock = MagicMock(return_value="recovereduser")
 
         with patch("browser_cookie3.chrome", chrome_mock), \
-             patch.object(auth_module, "_fetch_username", fetch_mock):
+             patch.object(auth_module, "_get_username", fetch_mock):
             _cj, username = auth_module.load_auth()
 
         chrome_mock.assert_called_once_with(domain_name="myfitnesspal.com")
@@ -168,7 +168,7 @@ class TestLoadAuthCorruptedCache:
         original_chrome.side_effect = chrome_side_effect
 
         with patch("browser_cookie3.chrome", original_chrome), \
-             patch.object(auth_module, "_fetch_username", return_value="u"):
+             patch.object(auth_module, "_get_username", return_value="u"):
             auth_module.load_auth()
 
         # The corrupt file was deleted before Chrome was called
@@ -188,7 +188,7 @@ class TestLoadAuthCorruptedCache:
 
         chrome_mock = MagicMock(return_value=_make_fake_cookiejar())
         with patch("browser_cookie3.chrome", chrome_mock), \
-             patch.object(auth_module, "_fetch_username", return_value="fallbackuser"):
+             patch.object(auth_module, "_get_username", return_value="fallbackuser"):
             _cj, username = auth_module.load_auth()
 
         chrome_mock.assert_called_once()
@@ -211,7 +211,7 @@ class TestLoadAuthNoCache:
 
         chrome_mock = MagicMock(return_value=_make_fake_cookiejar())
         with patch("browser_cookie3.chrome", chrome_mock), \
-             patch.object(auth_module, "_fetch_username", return_value="firstrun"):
+             patch.object(auth_module, "_get_username", return_value="firstrun"):
             _cj, username = auth_module.load_auth()
 
         chrome_mock.assert_called_once()
@@ -226,7 +226,7 @@ class TestLoadAuthNoCache:
         monkeypatch.setattr(auth_module, "CONFIG_DIR", tmp_path)
 
         with patch("browser_cookie3.chrome", return_value=_make_fake_cookiejar()), \
-             patch.object(auth_module, "_fetch_username", return_value="newuser"):
+             patch.object(auth_module, "_get_username", return_value="newuser"):
             auth_module.load_auth()
 
         data = json.loads(cache_file.read_text())

@@ -10,6 +10,15 @@ CONFIG_DIR = Path.home() / ".config" / "mfp-mcp"
 COOKIE_CACHE = CONFIG_DIR / "cookies.json"
 _COOKIE_TTL = 12 * 3600  # seconds before re-reading from Chrome
 
+# Load .env from cwd at import time (same pattern as strava-mcp)
+_ENV_FILE = Path.cwd() / ".env"
+if _ENV_FILE.exists():
+    for _line in _ENV_FILE.read_text().splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), _v.strip())
+
 
 def _cookies_to_list(cj: CookieJar) -> list[dict]:
     return [
@@ -41,19 +50,16 @@ def _list_to_cookiejar(cookie_list: list[dict]) -> CookieJar:
     return cj
 
 
-def _fetch_username(cj: CookieJar) -> str:
-    """Resolve the MFP username by following the /food/diary redirect."""
-    import requests
-    s = requests.Session()
-    s.cookies.update(cj)
-    r = s.get("https://www.myfitnesspal.com/food/diary", allow_redirects=True, timeout=10)
-    if "/food/diary/" in r.url:
-        username = r.url.split("/food/diary/")[1].split("?")[0].rstrip("/")
-        if username:
-            return username
+def _get_username() -> str:
+    """Return MFP username from MFP_USERNAME env var, or raise with a clear message."""
+    username = os.environ.get("MFP_USERNAME", "").strip()
+    if username:
+        return username
     raise RuntimeError(
-        "Could not resolve MFP username from session cookies. "
-        "Make sure you are logged into myfitnesspal.com in Chrome, then re-run `mfp-mcp auth`."
+        "MFP_USERNAME is not set.\n"
+        "Add it to a .env file in your working directory:\n\n"
+        "  MFP_USERNAME=your_myfitnesspal_username\n\n"
+        "Then re-run `mfp-mcp auth`."
     )
 
 
@@ -72,7 +78,7 @@ def load_auth() -> tuple[CookieJar, str]:
                 COOKIE_CACHE.unlink(missing_ok=True)
 
     cj = browser_cookie3.chrome(domain_name="myfitnesspal.com")
-    username = _fetch_username(cj)
+    username = _get_username()
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     # Use os.open with O_CREAT and mode 0o600 so the file is never readable by
     # other local users, even briefly between creation and a separate chmod call.

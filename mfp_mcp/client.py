@@ -8,8 +8,12 @@ from .auth import load_auth
 class MFPClient:
     def __init__(self) -> None:
         import myfitnesspal
+        from unittest.mock import patch
         cj, username = load_auth()
-        self._mfp = myfitnesspal.Client(username=username, login=False, unit_aware=True)
+        # myfitnesspal.Client.__init__ calls get_password_from_keyring unconditionally,
+        # even with login=False. Suppress it — we authenticate via injected cookies.
+        with patch("myfitnesspal.client.get_password_from_keyring", return_value=None):
+            self._mfp = myfitnesspal.Client(username=username, login=False, unit_aware=True)
         self._mfp.session.cookies.update(cj)
 
     def get_date(self, year: int, month: int, day: int):
