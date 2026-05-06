@@ -41,8 +41,24 @@ def _list_to_cookiejar(cookie_list: list[dict]) -> CookieJar:
     return cj
 
 
-def load_cookiejar() -> CookieJar:
-    """Return cached cookiejar from disk, or read fresh from Chrome and cache it."""
+def _fetch_username(cj: CookieJar) -> str:
+    """Resolve the MFP username by following the /food/diary redirect."""
+    import requests
+    s = requests.Session()
+    s.cookies.update(cj)
+    r = s.get("https://www.myfitnesspal.com/food/diary", allow_redirects=True, timeout=10)
+    if "/food/diary/" in r.url:
+        username = r.url.split("/food/diary/")[1].split("?")[0].rstrip("/")
+        if username:
+            return username
+    raise RuntimeError(
+        "Could not resolve MFP username from session cookies. "
+        "Make sure you are logged into myfitnesspal.com in Chrome, then re-run `mfp-mcp auth`."
+    )
+
+
+def load_auth() -> tuple[CookieJar, str]:
+    """Return (cookiejar, username), reading from cache or fresh from Chrome."""
     import browser_cookie3
 
     if COOKIE_CACHE.exists():
@@ -50,15 +66,17 @@ def load_cookiejar() -> CookieJar:
         if age < _COOKIE_TTL:
             try:
                 with open(COOKIE_CACHE) as f:
-                    return _list_to_cookiejar(json.load(f))
+                    data = json.load(f)
+                return _list_to_cookiejar(data["cookies"]), data["username"]
             except (json.JSONDecodeError, KeyError, OSError):
                 COOKIE_CACHE.unlink(missing_ok=True)
 
     cj = browser_cookie3.chrome(domain_name="myfitnesspal.com")
+    username = _fetch_username(cj)
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     # Use os.open with O_CREAT and mode 0o600 so the file is never readable by
     # other local users, even briefly between creation and a separate chmod call.
     fd = os.open(COOKIE_CACHE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
-        json.dump(_cookies_to_list(cj), f)
-    return cj
+        json.dump({"username": username, "cookies": _cookies_to_list(cj)}, f)
+    return cj, username

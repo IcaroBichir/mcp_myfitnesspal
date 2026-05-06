@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from datetime import date
 
-from .auth import load_cookiejar
+from .auth import load_auth
 
 
 class MFPClient:
     def __init__(self) -> None:
         import myfitnesspal
-        self._mfp = myfitnesspal.Client(cookiejar=load_cookiejar(), unit_aware=True)
+        cj, username = load_auth()
+        self._mfp = myfitnesspal.Client(username=username, login=False, unit_aware=True)
+        self._mfp.session.cookies.update(cj)
 
     def get_date(self, year: int, month: int, day: int):
         return self._mfp.get_date(year, month, day)

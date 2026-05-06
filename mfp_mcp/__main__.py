@@ -10,12 +10,13 @@ def cli() -> None:
 
 @cli.command()
 def auth() -> None:
-    """Read Chrome cookies and warm the local cache (~/.config/mfp-mcp/cookies.json)."""
-    from .auth import COOKIE_CACHE, load_cookiejar
+    """Read Chrome cookies, resolve MFP username, and warm the local cache."""
+    from .auth import COOKIE_CACHE, load_auth
 
     try:
-        load_cookiejar()
-        click.echo(f"Auth OK — cookies cached at: {COOKIE_CACHE}")
+        _, username = load_auth()
+        click.echo(f"Auth OK — logged in as: {username}")
+        click.echo(f"Cache saved to: {COOKIE_CACHE}")
     except Exception as exc:
         click.echo(f"Auth failed: {exc}", err=True)
         raise SystemExit(1)

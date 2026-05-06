@@ -19,6 +19,7 @@ dependencies = [
     "myfitnesspal",
     "lxml>=5.0",
     "browser-cookie3",
+    "requests>=2.28.0",
     "click>=8.1.0",
 ]
 
