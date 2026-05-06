@@ -119,7 +119,18 @@ Quit and reopen Claude Code. You should see `myfitnesspal` listed as a connected
 
 ---
 
-## Testing
+## Tests
+
+```bash
+pip install -e ".[dev]"   # installs pytest
+pytest tests/ -v
+```
+
+68 tests covering server helper functions (`_parse_date`, `_to_number`, `_format_nutrition`, `_sum_meal_totals`), all 6 MCP tool functions (date validation, range limits, output structure), and `auth.py` cookie-cache logic (valid cache, stale cache, corrupted JSON fallback). No live MFP or Chrome calls — `MFPClient` and `browser_cookie3` are mocked.
+
+---
+
+## Example prompts
 
 Once connected, try these prompts in Claude Code:
 

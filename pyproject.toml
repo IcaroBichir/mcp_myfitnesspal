@@ -26,6 +26,9 @@ dependencies = [
 [project.scripts]
 mfp-mcp = "mfp_mcp.__main__:cli"
 
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
 [project.urls]
 Homepage = "https://github.com/IcaroBichir/mcp_myfitnesspal"
 Issues = "https://github.com/IcaroBichir/mcp_myfitnesspal/issues"
