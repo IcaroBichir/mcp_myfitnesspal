@@ -1,77 +1,20 @@
-#!/usr/bin/env python3
-"""MyFitnessPal MCP server — pulls diary, exercise, and measurement data."""
+from __future__ import annotations
 
-import json
-import os
-import time
 from datetime import datetime, date, timedelta
-from pathlib import Path
 from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
 
-_COOKIE_CACHE = Path.home() / ".mfp_cookies.json"
-_COOKIE_TTL = 12 * 3600  # seconds before re-reading from Chrome
+from .client import MFPClient
 
-mcp = FastMCP("MyFitnessPal")
-
-_client = None
-
-
-def _cookies_to_list(cj):
-    return [
-        {k: getattr(c, k) for k in ("name", "value", "domain", "path", "secure", "expires")}
-        for c in cj
-    ]
-
-
-def _list_to_cookiejar(cookie_list):
-    import http.cookiejar
-    cj = http.cookiejar.CookieJar()
-    for attrs in cookie_list:
-        c = http.cookiejar.Cookie(
-            version=0,
-            name=attrs["name"],
-            value=attrs["value"],
-            port=None, port_specified=False,
-            domain=attrs["domain"],
-            domain_specified=bool(attrs["domain"]),
-            domain_initial_dot=attrs["domain"].startswith("."),
-            path=attrs["path"],
-            path_specified=bool(attrs["path"]),
-            secure=attrs["secure"],
-            expires=attrs["expires"],
-            discard=True,
-            comment=None, comment_url=None,
-            rest={},
-        )
-        cj.set_cookie(c)
-    return cj
-
-
-def _load_cookiejar():
-    """Return cached cookiejar from disk, or read fresh from Chrome and cache it."""
-    import browser_cookie3
-    if _COOKIE_CACHE.exists():
-        age = time.time() - _COOKIE_CACHE.stat().st_mtime
-        if age < _COOKIE_TTL:
-            try:
-                with open(_COOKIE_CACHE) as f:
-                    return _list_to_cookiejar(json.load(f))
-            except (json.JSONDecodeError, KeyError, OSError):
-                _COOKIE_CACHE.unlink(missing_ok=True)
-    cj = browser_cookie3.chrome(domain_name="myfitnesspal.com")
-    with open(_COOKIE_CACHE, "w") as f:
-        os.chmod(_COOKIE_CACHE, 0o600)
-        json.dump(_cookies_to_list(cj), f)
-    return cj
-
-
-def _get_client():
-    global _client
-    if _client is None:
-        import myfitnesspal
-        _client = myfitnesspal.Client(cookiejar=_load_cookiejar(), unit_aware=True)
-    return _client
+mcp = FastMCP(
+    "MyFitnessPal",
+    instructions=(
+        "Use these tools to retrieve the authenticated user's MyFitnessPal data. "
+        "Nutrition values are in grams, calories in kcal. "
+        "Always present macros clearly with labels: calories, protein, carbs, fat."
+    ),
+)
 
 
 def _parse_date(date_str: str) -> date:
@@ -83,8 +26,8 @@ def _parse_date(date_str: str) -> date:
     raise ValueError(f"Unrecognized date format: {date_str!r}. Use YYYY-MM-DD.")
 
 
-def _to_number(v):
-    """Convert measurement library objects (Energy, Mass) or floats to plain numbers."""
+def _to_number(v) -> float | int:
+    """Convert unit-aware library objects (Energy, Mass) or floats to plain numbers."""
     if isinstance(v, float):
         return round(v, 1)
     if hasattr(v, "value"):
@@ -113,23 +56,20 @@ def get_food_diary(date: str) -> dict:
         date: Date in YYYY-MM-DD format (e.g. "2026-05-01")
 
     Returns a dict with keys:
-    - date: the queried date
+    - date: the queried date (ISO 8601)
     - meals: list of meals, each with name, entries (food items + nutrition), and meal totals
     - daily_totals: summed nutrition across all meals
     - goals: daily nutrition targets
     """
     d = _parse_date(date)
-    client = _get_client()
-    day = client.get_date(d.year, d.month, d.day)
+    day = MFPClient().get_date(d.year, d.month, d.day)
 
     meals = []
     for meal in day.meals:
-        entries = []
-        for entry in meal.entries:
-            entries.append({
-                "name": entry.name,
-                "nutrition": _format_nutrition(dict(entry.nutrition_information)),
-            })
+        entries = [
+            {"name": entry.name, "nutrition": _format_nutrition(dict(entry.nutrition_information))}
+            for entry in meal.entries
+        ]
         meals.append({
             "name": meal.name,
             "entries": entries,
@@ -147,7 +87,7 @@ def get_food_diary(date: str) -> dict:
 @mcp.tool()
 def get_food_diary_range(start_date: str, end_date: str) -> list[dict]:
     """
-    Return food diary summaries (totals only, no per-entry detail) for a date range.
+    Return food diary summaries (daily totals only, no per-entry detail) for a date range.
 
     Args:
         start_date: Start date in YYYY-MM-DD format (inclusive)
@@ -163,7 +103,7 @@ def get_food_diary_range(start_date: str, end_date: str) -> list[dict]:
     if (end - start).days >= 30:
         raise ValueError("Date range cannot exceed 30 days per call.")
 
-    client = _get_client()
+    client = MFPClient()
     results = []
     current = start
     while current <= end:
@@ -190,22 +130,19 @@ def get_exercise_diary(date: str) -> dict:
         date: Date in YYYY-MM-DD format
 
     Returns a dict with keys:
-    - date: the queried date
+    - date: the queried date (ISO 8601)
     - exercises: list of exercise categories, each with name, entries, and totals
     """
     d = _parse_date(date)
-    client = _get_client()
-    day = client.get_date(d.year, d.month, d.day)
+    day = MFPClient().get_date(d.year, d.month, d.day)
 
     exercise_categories = []
     try:
         for exercise_set in day.exercises:
-            entries = []
-            for entry in exercise_set.entries:
-                entries.append({
-                    "name": entry.name,
-                    "nutrition": _format_nutrition(dict(entry.nutrition_information)),
-                })
+            entries = [
+                {"name": entry.name, "nutrition": _format_nutrition(dict(entry.nutrition_information))}
+                for entry in exercise_set.entries
+            ]
             exercise_categories.append({
                 "name": exercise_set.name,
                 "entries": entries,
@@ -238,9 +175,9 @@ def get_measurements(measurement: str = "Weight", days: int = 30) -> dict:
         raise ValueError("days must be at least 1.")
     if days > 365:
         raise ValueError("days cannot exceed 365.")
+
     lower_bound = (datetime.now() - timedelta(days=days)).date()
-    client = _get_client()
-    raw = client.get_measurements(measurement, lower_bound=lower_bound)
+    raw = MFPClient().get_measurements(measurement, lower_bound=lower_bound)
 
     entries = [
         {"date": dt.isoformat() if hasattr(dt, "isoformat") else str(dt), "value": _to_number(v)}
@@ -265,7 +202,7 @@ def get_nutrition_summary(start_date: str, end_date: str) -> dict:
 
     Returns a dict with:
     - date_range: {start, end, days_with_data}
-    - totals: summed values across all days
+    - totals: summed nutrition values across all days
     - daily_averages: totals ÷ days_with_data
     - goals: the most recently seen daily goals
     """
@@ -276,7 +213,7 @@ def get_nutrition_summary(start_date: str, end_date: str) -> dict:
     if (end - start).days >= 30:
         raise ValueError("Date range cannot exceed 30 days per call.")
 
-    client = _get_client()
+    client = MFPClient()
     totals: dict = {}
     days_with_data = 0
     last_goals: dict = {}
@@ -305,8 +242,8 @@ def get_nutrition_summary(start_date: str, end_date: str) -> dict:
 
     return {
         "date_range": {
-            "start": start_date,
-            "end": end_date,
+            "start": start.isoformat(),
+            "end": end.isoformat(),
             "days_with_data": days_with_data,
         },
         "totals": _format_nutrition(totals),
@@ -325,23 +262,9 @@ def get_goals(date: Optional[str] = None) -> dict:
 
     Returns the nutrition goal targets (calories, macros, etc.).
     """
-    if date is None:
-        d = datetime.now().date()
-    else:
-        d = _parse_date(date)
-
-    client = _get_client()
-    day = client.get_date(d.year, d.month, d.day)
-    goals = dict(day.goals) if day.goals else {}
+    d = _parse_date(date) if date is not None else datetime.now().date()
+    day = MFPClient().get_date(d.year, d.month, d.day)
     return {
         "date": d.isoformat(),
-        "goals": _format_nutrition(goals),
+        "goals": _format_nutrition(dict(day.goals)) if day.goals else {},
     }
-
-
-def main():
-    mcp.run()
-
-
-if __name__ == "__main__":
-    main()

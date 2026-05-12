@@ -14,12 +14,14 @@ MCP server that pulls data from your MyFitnessPal account — food diary, exerci
 
 ## How auth works
 
-The server reads your MFP session cookies from Chrome via `browser_cookie3`. On macOS, Chrome encrypts its cookie database using a key stored in the system Keychain ("Chrome Safe Storage"). The first time the server runs, macOS will show a dialog asking for permission to access that key — click **Allow**. The cookies are then saved to `~/.mfp_cookies.pkl` and reused for 12 hours, so subsequent server starts (including across Claude sessions) don't trigger the dialog again.
+The server reads your MFP session cookies from Chrome via `browser_cookie3`. On macOS, Chrome encrypts its cookie database using a key stored in the system Keychain ("Chrome Safe Storage"). The first time the server runs, macOS will show a dialog asking for permission to access that key — click **Allow**.
 
-To force a fresh cookie read — for example, after logging back into MFP in Chrome — delete the cache file:
+After reading the cookies, the server follows the MFP `/food/diary` redirect to resolve your MFP username. Both the cookies and username are saved to `~/.config/mfp-mcp/cookies.json` (mode 0600) and reused for 12 hours, so subsequent server starts don't trigger the Keychain dialog again.
+
+To force a fresh auth — for example, after logging back into MFP in Chrome — re-run `mfp-mcp auth`, or delete the cache file manually:
 
 ```bash
-rm ~/.mfp_cookies.pkl
+rm ~/.config/mfp-mcp/cookies.json
 ```
 
 ## Tools
@@ -48,15 +50,13 @@ Steps to complete:
 2. Create a Python virtual environment inside it:
    cd ~/mcp_myfitnesspal && python3 -m venv .venv
 3. Install dependencies:
-   .venv/bin/pip install "lxml>=5.0" "mcp[cli]" myfitnesspal browser-cookie3
-   (or simply: .venv/bin/pip install -e .)
+   .venv/bin/pip install -e .
 4. Warm the cookie cache:
-   cd ~/mcp_myfitnesspal && .venv/bin/python3 -c "import server; server._get_client(); print('Auth OK')"
+   ~/mcp_myfitnesspal/.venv/bin/mfp-mcp auth
    (macOS will show a Keychain dialog — click Allow. This only happens once.)
 5. Register the server globally with Claude Code:
    claude mcp add -s user myfitnesspal \
-     ~/mcp_myfitnesspal/.venv/bin/python3 -- \
-     ~/mcp_myfitnesspal/server.py
+     ~/mcp_myfitnesspal/.venv/bin/mfp-mcp -- serve
 
 Before running step 4, make sure you are logged into myfitnesspal.com in Google Chrome.
 ```
@@ -78,10 +78,10 @@ cd ~/mcp_myfitnesspal
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install "lxml>=5.0" "mcp[cli]" myfitnesspal browser-cookie3
+.venv/bin/pip install -e .
 ```
 
-> **Python 3.14 note:** `lxml` 4.x doesn't build on 3.14. The `lxml>=5.0` pin above handles this automatically.
+> **Python 3.14 note:** `lxml` 4.x doesn't build on 3.14. The `lxml>=5.0` pin in `pyproject.toml` handles this automatically.
 
 ### 3. Log into MFP in Chrome
 
@@ -89,33 +89,49 @@ Open Chrome and make sure you're logged into [myfitnesspal.com](https://www.myfi
 
 ### 4. Warm the cookie cache
 
-Run this once from the project directory:
-
 ```bash
-.venv/bin/python3 -c "import server; server._get_client(); print('Auth OK')"
+.venv/bin/mfp-mcp auth
 ```
 
 macOS will show a dialog: **"python3" wants access to your confidential information stored in "Chrome Safe Storage" in your keychain.** Click **Allow**.
 
-The server reads your MFP session cookies from Chrome, decrypts them using that Keychain key, and saves the result to `~/.mfp_cookies.pkl`. Future server starts (including across Claude Code sessions) load from that file — no further Keychain prompts until the cache expires (12 hours).
+The command reads your MFP session cookies from Chrome, resolves your MFP username via the `/food/diary` redirect, and saves both to `~/.config/mfp-mcp/cookies.json` (mode 0600). On success it prints:
+
+```
+Auth OK — logged in as: your_mfp_username
+Cache saved to: /Users/you/.config/mfp-mcp/cookies.json
+```
+
+Future server starts load from that file — no further Keychain prompts until the cache expires (12 hours).
 
 ### 5. Register with Claude Code
 
 ```bash
 claude mcp add -s user myfitnesspal \
-  ~/mcp_myfitnesspal/.venv/bin/python3 -- \
-  ~/mcp_myfitnesspal/server.py
+  ~/mcp_myfitnesspal/.venv/bin/mfp-mcp -- serve
 ```
 
-The `-s user` flag registers the server globally so it's available in every Claude Code session, not just the current directory. This writes to `~/.claude.json` — the file Claude Code actually manages. Manually editing `.mcp.json` files won't take effect until the next session restart.
+The `-s user` flag registers the server globally so it's available in every Claude Code session.
 
 ### 6. Restart Claude Code
 
-Quit and reopen Claude Code, or open `/hooks` once to reload the MCP config. You should see `myfitnesspal` listed as a connected server.
+Quit and reopen Claude Code. You should see `myfitnesspal` listed as a connected server.
 
 ---
 
-## Testing
+## Tests
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"   # installs the package + pytest
+.venv/bin/pytest tests/ -v
+```
+
+68 tests covering server helper functions (`_parse_date`, `_to_number`, `_format_nutrition`, `_sum_meal_totals`), all 6 MCP tool functions (date validation, range limits, output structure), and `auth.py` cookie-cache logic (valid cache, stale cache, corrupted JSON fallback). No live MFP or Chrome calls — `MFPClient` and `browser_cookie3` are mocked.
+
+---
+
+## Example prompts
 
 Once connected, try these prompts in Claude Code:
 
@@ -129,13 +145,13 @@ Once connected, try these prompts in Claude Code:
 ## Troubleshooting
 
 **macOS Keychain dialog keeps appearing**
-Delete `~/.mfp_cookies.pkl` and re-run step 4. If the dialog appears on every call, the cache write may have failed — check that `~/.mfp_cookies.pkl` exists after running step 4.
+Delete `~/.config/mfp-mcp/cookies.json` and re-run `mfp-mcp auth`. If the dialog appears on every call, the cache write may have failed — check that the file exists after running auth.
 
 **Auth error / no data returned**
-The session cookie may have expired. Log out and back into myfitnesspal.com in Chrome, delete `~/.mfp_cookies.pkl`, and re-run step 4.
+The session cookie may have expired. Log out and back into myfitnesspal.com in Chrome, delete `~/.config/mfp-mcp/cookies.json`, and re-run `mfp-mcp auth`.
 
 **`lxml` build error on Python 3.14**
-Make sure you're installing `lxml>=5.0`, not just `lxml`. The version constraint is already in `pyproject.toml`.
+Make sure you're installing via `pip install -e .` — the `lxml>=5.0` constraint in `pyproject.toml` handles this automatically.
 
 **Server not appearing in Claude**
 Use `claude mcp add -s user` to register — don't edit `.mcp.json` files manually. Restart Claude Code after any config change.
