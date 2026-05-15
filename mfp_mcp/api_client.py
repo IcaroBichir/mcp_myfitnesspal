@@ -94,11 +94,30 @@ class MFPApiClient:
             return cached
 
         r = self._session.get(
-            f"{_API_BASE}/v2/diary?username={self._username}&date={date_str}",
+            f"{_API_BASE}/v2/diary",
+            params={"username": self._username, "date": date_str},
             timeout=15,
         )
         r.raise_for_status()
-        items = r.json().get("items", [])
+        all_items = r.json().get("items", [])
+        # The API currently returns today's diary for every date query; the
+        # item-level "date" field reveals the actual date of each entry.
+        # Keep only items that match the requested date — this prevents showing
+        # today's data on historical days. Historical dates will return empty
+        # until the correct endpoint or parameter for past diaries is found.
+        items = [item for item in all_items if item.get("date") == date_str]
+
+        # Fallback: if no diary items, try the /v2/nutrition endpoint which may
+        # have better historical date support (response shape is different).
+        if not items and date_str != date.today().isoformat():
+            rn = self._session.get(
+                f"{_API_BASE}/v2/nutrition",
+                params={"username": self._username, "date": date_str},
+                timeout=15,
+            )
+            if rn.ok:
+                nutrition_items = rn.json().get("items", [])
+                items = [i for i in nutrition_items if i.get("date") == date_str]
 
         ttl = _DIARY_TTL_TODAY if date_str == date.today().isoformat() else _DIARY_TTL_HISTORICAL
         self._cache.set(cache_key, items, ttl=ttl)
