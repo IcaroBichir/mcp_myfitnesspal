@@ -19,9 +19,10 @@ from .cache import CacheStore
 _API_BASE = "https://api.myfitnesspal.com"
 _TOKEN_URL = "https://www.myfitnesspal.com/user/auth_token?refresh=true"
 
-_TOKEN_TTL = 8 * 86400   # cache for 8 days (token lives 10 days, refresh before expiry)
-_DIARY_TTL = 1800         # 30 min — diary changes during the day
-_MEASUREMENTS_TTL = 3600  # 1 hour
+_TOKEN_TTL = 8 * 86400              # cache for 8 days (token lives 10 days, refresh before expiry)
+_DIARY_TTL_TODAY = 1800             # 30 min — today's diary may still be updated
+_DIARY_TTL_HISTORICAL = 15 * 86400  # 15 days — past diary entries are immutable
+_MEASUREMENTS_TTL = 3600            # 1 hour
 
 _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
@@ -93,13 +94,15 @@ class MFPApiClient:
             return cached
 
         r = self._session.get(
-            f"{_API_BASE}/v2/diary?username={self._username}&date={date_str}",
+            f"{_API_BASE}/v2/diary",
+            params={"username": self._username, "entry_date": date_str},
             timeout=15,
         )
         r.raise_for_status()
         items = r.json().get("items", [])
 
-        self._cache.set(cache_key, items, ttl=_DIARY_TTL)
+        ttl = _DIARY_TTL_TODAY if date_str == date.today().isoformat() else _DIARY_TTL_HISTORICAL
+        self._cache.set(cache_key, items, ttl=ttl)
         return items
 
     def get_measurements(self, measurement: str, from_date: str, to_date: str) -> list[dict]:
