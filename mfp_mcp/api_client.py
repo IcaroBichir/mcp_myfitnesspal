@@ -112,9 +112,13 @@ class MFPApiClient:
             return cached
 
         r = self._session.get(
-            f"{_API_BASE}/v2/measurements"
-            f"?username={self._username}&type={measurement}"
-            f"&from_date={from_date}&to_date={to_date}",
+            f"{_API_BASE}/v2/measurements",
+            params={
+                "username": self._username,
+                "type": measurement,
+                "from_date": from_date,
+                "to_date": to_date,
+            },
             timeout=15,
         )
         r.raise_for_status()
