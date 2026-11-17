@@ -17,7 +17,11 @@ if _ENV_FILE.exists():
         _line = _line.strip()
         if _line and not _line.startswith("#") and "=" in _line:
             _k, _v = _line.split("=", 1)
-            os.environ.setdefault(_k.strip(), _v.strip())
+            # Only accept this server's own keys: the .env is read from whatever
+            # directory the server was launched in, and arbitrary vars there
+            # (HTTPS_PROXY, SSL_CERT_FILE, ...) could redirect API traffic.
+            if _k.strip().startswith("MFP_"):
+                os.environ.setdefault(_k.strip(), _v.strip())
 
 
 def _cookies_to_list(cj: CookieJar) -> list[dict]:
